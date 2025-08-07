@@ -1,44 +1,81 @@
-// Required NuGet Packages: // - PdfSharp // - PdfiumViewer
+using System;
+using System.Windows;
+using Microsoft.Win32;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
+using PdfSharp.Drawing;
+using PdfiumViewer;
+using System.Windows.Forms.Integration;
 
-using System; using System.IO; using System.Windows; using System.Windows.Forms.Integration; using PdfiumViewer; using PdfSharp.Pdf; using PdfSharp.Drawing; using Microsoft.Win32;
-
-namespace WpfPdfEditor { public partial class MainWindow : Window { private PdfViewer _pdfViewer; private string _currentFilePath;
-
-public MainWindow()
+namespace PdfEditorApp
+{
+    public partial class MainWindow : Window
     {
-        InitializeComponent();
+        private PdfDocument pdfSharpDoc;
+        private string currentFilePath;
+        private PdfiumViewer.PdfViewer pdfiumViewer;
 
-        // Setup PdfiumViewer in WindowsFormsHost
-        _pdfViewer = new PdfViewer();
-        WindowsFormsHost host = new WindowsFormsHost();
-        host.Child = _pdfViewer;
-        PdfContainer.Children.Add(host); // PdfContainer is a Grid or Panel in XAML
-    }
-
-    private void LoadPdf_Click(object sender, RoutedEventArgs e)
-    {
-        OpenFileDialog ofd = new OpenFileDialog();
-        ofd.Filter = "PDF Files (*.pdf)|*.pdf";
-        if (ofd.ShowDialog() == true)
+        public MainWindow()
         {
-            _currentFilePath = ofd.FileName;
-            _pdfViewer.Document?.Dispose();
-            _pdfViewer.Document = PdfiumViewer.PdfDocument.Load(_currentFilePath);
+            InitializeComponent();
+
+            // Initialize PdfiumViewer inside WindowsFormsHost
+            pdfiumViewer = new PdfiumViewer.PdfViewer
+            {
+                Dock = System.Windows.Forms.DockStyle.Fill
+            };
+            pdfHost.Child = pdfiumViewer;
+        }
+
+        private void OpenPdf_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog { Filter = "PDF files (*.pdf)|*.pdf" };
+            if (dialog.ShowDialog() == true)
+            {
+                currentFilePath = dialog.FileName;
+
+                // Load for viewing
+                pdfiumViewer.Document?.Dispose(); // clean up old one
+                pdfiumViewer.Document = PdfiumViewer.PdfDocument.Load(currentFilePath);
+
+                // Load for editing
+                pdfSharpDoc = PdfReader.Open(currentFilePath, PdfDocumentOpenMode.Modify);
+            }
+        }
+
+        private void AddText_Click(object sender, RoutedEventArgs e)
+        {
+            if (pdfSharpDoc == null)
+            {
+                MessageBox.Show("Please open a PDF file first.");
+                return;
+            }
+
+            var page = pdfSharpDoc.Pages[0];
+            var gfx = XGraphics.FromPdfPage(page);
+            var font = new XFont("Arial", 20, XFontStyle.Bold);
+
+            gfx.DrawString("Hello from PdfSharp!", font, XBrushes.Red,
+                new XRect(50, 50, page.Width, page.Height),
+                XStringFormats.TopLeft);
+
+            MessageBox.Show("Text added to page 1.");
+        }
+
+        private void SavePdf_Click(object sender, RoutedEventArgs e)
+        {
+            if (pdfSharpDoc == null)
+            {
+                MessageBox.Show("No PDF loaded.");
+                return;
+            }
+
+            var dialog = new SaveFileDialog { Filter = "PDF files (*.pdf)|*.pdf" };
+            if (dialog.ShowDialog() == true)
+            {
+                pdfSharpDoc.Save(dialog.FileName);
+                MessageBox.Show("PDF saved successfully.");
+            }
         }
     }
-
-    private void AddText_Click(object sender, RoutedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(_currentFilePath)) return;
-
-        string newPath = Path.Combine(Path.GetDirectoryName(_currentFilePath), "edited.pdf");
-        var document = PdfSharp.Pdf.IO.PdfReader.Open(_currentFilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Modify);
-        var gfx = XGraphics.FromPdfPage(document.Pages[0]);
-        gfx.DrawString("Edited by WPF App", new XFont("Arial", 14), XBrushes.Black, new XRect(100, 100, 300, 50), XStringFormats.TopLeft);
-        document.Save(newPath);
-        MessageBox.Show($"PDF edited and saved as: {newPath}");
-    }
 }
-
-}
-
